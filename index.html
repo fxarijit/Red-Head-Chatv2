@@ -1,95 +1,87 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Red Head Chat - Public</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getDatabase, ref, push, onChildAdded } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Red Head Chat - Public</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, push, onChildAdded } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyA9Hyb4nv6yZcyOqI_azRLB0v31jdO3YvU",
-      authDomain: "red-head-7391.firebaseapp.com",
-      databaseURL: "https://red-head-7391-default-rtdb.firebaseio.com",
-      projectId: "red-head-7391",
-      storageBucket: "red-head-7391.firebasestorage.app",
-      messagingSenderId: "408168002586",
-      appId: "1:408168002586:web:f9920d13106cbe375b8da3",
-      measurementId: "G-N6QX49H4KN"
-    };
+const firebaseConfig = {
+  apiKey: "AIzaSyA9Hyb4nv6yZcyOqI_azRLB0v31jdO3YvU",
+  authDomain: "red-head-7391.firebaseapp.com",
+  databaseURL: "https://red-head-7391-default-rtdb.firebaseio.com",
+  projectId: "red-head-7391",
+  storageBucket: "red-head-7391.firebasestorage.app",
+  messagingSenderId: "408168002586",
+  appId: "1:408168002586:web:f9920d13106cbe375b8da3",
+  measurementId: "G-N6QX49H4KN"
+};
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getDatabase(app);
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
-    // === Public Functions ===
-    async function publicRegister() {
-      const username = document.getElementById("publicUsername").value;
-      const password = document.getElementById("publicPassword").value;
-      if(!username || !password) return alert("Fill username and password");
-      const email = `${username}@redheadchat.local`;
-      await createUserWithEmailAndPassword(auth, email, password);
-      alert("✅ Registered! Now login.");
-    }
+const hardUsername = "Akash@9872";
+const hardPassword = "Akash@7391";
 
-    async function publicLogin() {
-      const username = document.getElementById("publicUsername").value;
-      const password = document.getElementById("publicPassword").value;
-      const email = `${username}@redheadchat.local`;
-      await signInWithEmailAndPassword(auth, email, password);
-      document.getElementById("publicAuth").classList.add("hidden");
-      document.getElementById("publicChat").classList.remove("hidden");
-      listenPublicChat();
-    }
+function publicLogin() {
+  const username = document.getElementById("publicUsername").value;
+  const password = document.getElementById("publicPassword").value;
 
-    function listenPublicChat() {
-      const messagesRef = ref(db, "chats/public/messages");
-      onChildAdded(messagesRef, (snapshot) => {
-        const msg = snapshot.val();
-        const div = document.createElement("div");
-        div.className = "p-1";
-        div.textContent = msg.sender + ": " + msg.text;
-        document.getElementById("messagesPublic").appendChild(div);
-      });
-    }
+  if(username === hardUsername && password === hardPassword){
+    alert("✅ Login Successful!");
+    document.getElementById("publicAuth").classList.add("hidden");
+    document.getElementById("publicChat").classList.remove("hidden");
+    listenPublicChat();
+  } else {
+    alert("❌ Incorrect username or password!");
+  }
+}
 
-    function sendPublicMsg() {
-      const text = document.getElementById("publicMsg").value;
-      if(!text) return;
-      push(ref(db, "chats/public/messages"), { sender: "user", text, timestamp: Date.now() });
-      document.getElementById("publicMsg").value = "";
-    }
+function listenPublicChat() {
+  const messagesRef = ref(db, "chats/public/messages");
+  onChildAdded(messagesRef, (snapshot) => {
+    const msg = snapshot.val();
+    const div = document.createElement("div");
+    div.className = "p-1";
+    div.textContent = msg.sender + ": " + msg.text;
+    document.getElementById("messagesPublic").appendChild(div);
+  });
+}
 
-    window.publicRegister = publicRegister;
-    window.publicLogin = publicLogin;
-    window.sendPublicMsg = sendPublicMsg;
+function sendPublicMsg() {
+  const text = document.getElementById("publicMsg").value;
+  if(!text) return;
+  push(ref(db, "chats/public/messages"), { sender: "user", text, timestamp: Date.now() });
+  document.getElementById("publicMsg").value = "";
+}
 
-  </script>
+window.publicLogin = publicLogin;
+window.sendPublicMsg = sendPublicMsg;
+</script>
 </head>
 <body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen">
 
-  <div class="w-full max-w-md p-4">
-    <h1 class="text-2xl font-bold text-center mb-4">💬 Chat with Admin</h1>
+<div class="w-full max-w-md p-4">
+  <h1 class="text-2xl font-bold text-center mb-4">💬 Chat with Admin</h1>
 
-    <!-- Login/Register -->
-    <div id="publicAuth" class="space-y-2">
-      <input id="publicUsername" type="text" placeholder="Username" class="w-full p-2 rounded bg-gray-800"/>
-      <input id="publicPassword" type="password" placeholder="Password" class="w-full p-2 rounded bg-gray-800"/>
-      <button onclick="publicRegister()" class="w-full bg-blue-600 p-2 rounded">Register</button>
-      <button onclick="publicLogin()" class="w-full bg-green-600 p-2 rounded">Login</button>
-    </div>
+  <!-- Login -->
+  <div id="publicAuth" class="space-y-2">
+    <input id="publicUsername" type="text" placeholder="Username" class="w-full p-2 rounded bg-gray-800"/>
+    <input id="publicPassword" type="password" placeholder="Password" class="w-full p-2 rounded bg-gray-800"/>
+    <button onclick="publicLogin()" class="w-full bg-green-600 p-2 rounded">Login</button>
+  </div>
 
-    <!-- Chat -->
-    <div id="publicChat" class="hidden">
-      <div id="messagesPublic" class="h-64 overflow-y-auto bg-gray-800 p-2 rounded mb-2"></div>
-      <div class="flex">
-        <input id="publicMsg" type="text" placeholder="Type a message..." class="flex-grow p-2 rounded-l bg-gray-700"/>
-        <button onclick="sendPublicMsg()" class="bg-blue-600 px-4 rounded-r">Send</button>
-      </div>
+  <!-- Chat -->
+  <div id="publicChat" class="hidden">
+    <div id="messagesPublic" class="h-64 overflow-y-auto bg-gray-800 p-2 rounded mb-2"></div>
+    <div class="flex">
+      <input id="publicMsg" type="text" placeholder="Type a message..." class="flex-grow p-2 rounded-l bg-gray-700"/>
+      <button onclick="sendPublicMsg()" class="bg-blue-600 px-4 rounded-r">Send</button>
     </div>
   </div>
+</div>
 </body>
 </html>
