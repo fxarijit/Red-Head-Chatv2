@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NeonChat · Public ↔ Admin</title>
+  <style>
+    :root {
+      --bg1:#0b1020; --bg2:#05060a; --glass: rgba(255,255,255,0.06);
+      --text:#e7f0ff; --muted:#a9b3c7; --accent:#24d1ff; --accent2:#b266ff;
+      --ring: rgba(36, 209, 255, 0.4);
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif; color:var(--text); background: radial-gradient(1200px 600px at 10% -10%, rgba(36,209,255,0.18), transparent), radial-gradient(900px 500px at 105% 0%, rgba(178,102,255,0.15), transparent), linear-gradient(180deg, var(--bg1), var(--bg2)); }
+    .container { max-width: 1100px; margin: 0 auto; padding: 18px; }
+    .grid { display: grid; gap: 18px; }
+    @media(min-width: 900px){ .grid-2 { grid-template-columns: 2fr 1.2fr; } }
+    .card { background: var(--glass); border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.35); backdrop-filter: blur(10px); }
+    .title { display:flex; align-items:center; justify-content:space-between; gap:12px; margin: 6px 0 16px; }
+    .badge { font-size: 12px; color: var(--text); background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); padding: 6px 10px; border-radius: 999px; }
+    .row { display:flex; gap: 10px; align-items:center; }
+    .col { display:flex; flex-direction:column; gap: 6px; }
+    input, button, textarea, select { color: var(--text); }
+    input, textarea { width: 100%; background: rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.12); padding: 12px 14px; border-radius: 14px; outline: none; }
+    input:focus, textarea:focus, .btn:focus { box-shadow: 0 0 0 2px var(--ring); }
+    .btn { background: linear-gradient(90deg, rgba(36,209,255,0.35), rgba(178,102,255,0.35)); border: 1px solid rgba(255,255,255,0.18); padding: 11px 14px; border-radius: 14px; cursor:pointer; }
+    .btn.ghost { background: rgba(255,255,255,0.06); }
+    .muted { color: var(--muted); }
+    .list { max-height: 60vh; overflow: auto; display:flex; flex-direction:column; gap:10px; }
+    .pill { background: rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.12); padding: 10px 12px; border-radius: 14px; width: 100%; text-align: left; }
+    .chat { height: 62vh; overflow:auto; display:flex; flex-direction: column; gap:10px; padding-right: 6px; }
+    .bubble { max-width: 78%; padding: 10px 12px; border-radius: 16px; word-break: break-word; }
+    .me { margin-left: auto; background: rgba(36,209,255,0.22); }
+    .them { margin-right: auto; background: rgba(255,255,255,0.08); }
+    .timestamp { font-size: 10px; color: var(--muted); margin-top: 4px; }
+    .subtle { font-size: 12px; }
+    .searchbox { display:flex; gap:8px; align-items:center; background: rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.12); padding: 8px 12px; border-radius: 14px; }
+  </style>
+</head>
+<body>
+
+
+  <div class="container">
+    <div id="app" class="grid grid-2"></div>
+  </div>
+
+  <script type="module">
+    // Firebase SDK v10 (modular) via gstatic CDN
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, setPersistence, browserLocalPersistence, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getDatabase, ref, set, push, onChildAdded, onValue, query, orderByChild, equalTo, update, get, child, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    const ADMIN_EMAIL = "headred7391@gmail.com"; // admin login email (admin route only)
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyA9Hyb4nv6yZcyOqI_azRLB0v31jdO3YvU",
+      authDomain: "red-head-7391.firebaseapp.com",
+      databaseURL: "https://red-head-7391-default-rtdb.firebaseio.com",
+      projectId: "red-head-7391",
+      storageBucket: "red-head-7391.firebasestorage.app",
+      messagingSenderId: "408168002586",
+      appId: "1:408168002586:web:f9920d13106cbe375b8da3",
+      measurementId: "G-N6QX49H4KN"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    // Route detection (single file, separate URLs): /admin => admin UI; others => public UI
+    const IS_ADMIN_ROUTE = location.pathname.replace(/\/+$/, '') === '/admin';
+
+    setPersistence(auth, browserLocalPersistence);
+
+    // Utils
+    const $ = (sel) => document.querySelector(sel);
+    const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
+    const usernameToEmail = (u) => `${u.toLowerCase()}@public.local`;
+    const safe = (s) => String(s || '')
+      .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+
+    async function ensureUserDoc(user, extra={}){
+      const uref = ref(db, `users/${user.uid}`);
+      const snap = await get(uref);
+      if (!snap.exists()) {
+        await set(uref, {
+          uid: user.uid,
+          email: user.email,
+          username: extra.username || user.displayName || '',
+          isAdmin: !!extra.isAdmin,
+          createdAt: Date.now(),
+          lastSeen: Date.now()
+        });
+      } else {
+        await update(uref, { lastSeen: Date.now() });
+      }
+    }
+
+    function topBar(user, role){
+      const bar = el('div', 'title');
+      const left = el('div','row');
+      const h = el('div'); h.innerHTML = `<strong>NeonChat</strong>`;
+      const b = el('span','badge'); b.textContent = role;
+      left.append(h,b);
+      const right = el('div','row');
+      const label = el('span','muted subtle'); label.textContent = IS_ADMIN_ROUTE ? user.email : (user.displayName || user.username || '');
+      const logout = el('button','btn ghost'); logout.textContent = 'Sign out';
+      logout.onclick = () => signOut(auth);
+      right.append(label, logout);
+      bar.append(left,right);
+      return bar;
+    }
+
+    function messagesView(chatId, currentUser, peerLabel){
+      const wrap = el('div');
+      const chat = el('div','chat');
+      const inputRow = el('div','row');
+      const input = el('input'); input.placeholder = 'Type a message…';
+      const sendBtn = el('button','btn'); sendBtn.textContent = 'Send';
+      inputRow.append(input, sendBtn);
+      wrap.append(chat, el('div','').appendChild(el('div')) );
+      wrap.lastChild.replaceWith(inputRow);
+
+      // listen
+      const msgsRef = ref(db, `chats/${chatId}/messages`);
+      onChildAdded(orderByChild(msgsRef, 'timestamp'), (snap) => {
+        const m = snap.val();
+        const b = el('div', `bubble ${m.senderId === currentUser.uid ? 'me':'them'}`);
+        b.innerHTML = `${safe(m.text)}<div class="timestamp">${new Date(m.timestamp||Date.now()).toLocaleString()}</div>`;
+        chat.append(b);
+        chat.scrollTop = chat.scrollHeight;
+      });
+
+      async function send(){
+        const t = (input.value || '').trim();
+        if (!t) return;
+        const metaRef = ref(db, `chats/${chatId}/meta`);
+        await update(metaRef, {
+          chatId,
+          lastMessage: { text: t, senderId: currentUser.uid, timestamp: Date.now() },
+        });
+        const newMsgRef = push(ref(db, `chats/${chatId}/messages`));
+        await set(newMsgRef, { senderId: currentUser.uid, text: t, timestamp: Date.now(), type:'text' });
+        input.value = '';
+      }
+      sendBtn.onclick = send;
+      input.onkeydown = (e)=>{ if (e.key==='Enter') send(); };
+      return wrap;
+    }
+
+    function chatIdFor(publicUid, adminUid){ return `${publicUid}__${adminUid}`; }
+
+    async function loadAdminUid(){
+      // find any user with isAdmin=true and email=ADMIN_EMAIL
+      const q = query(ref(db, 'users'), orderByChild('email'));
+      const snap = await get(q);
+      let aid = null;
+      if (snap.exists()) {
+        snap.forEach(childSnap => {
+          const v = childSnap.val();
+          if (v.isAdmin === true && String(v.email).toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+            aid = childSnap.key;
+          }
+        });
+      }
+      return aid;
+    }
+
+    // ---------- PUBLIC UI (username only) ----------
+    function renderPublic(user){
+      const appRoot = $('#app'); appRoot.innerHTML = '';
+      const shell = el('div','grid grid-2');
+      const main = el('div','card');
+      const side = el('div','card');
+
+      main.append(topBar(user, 'Public'));
+
+      // fetch admin profile
+      loadAdminUid().then((adminUid)=>{
+        const adminNameRef = ref(db, `users/${adminUid}`);
+        onValue(adminNameRef, (s)=>{
+          const data = s.val()||{};
+          header.querySelector('strong').textContent = 'NeonChat';
+          subtitle.textContent = data.username || data.email || 'Admin';
+        });
+        const cid = chatIdFor(user.uid, adminUid);
+        // ensure meta with participants
+        update(ref(db, `chats/${cid}/meta`), { participantIds: [user.uid, adminUid] });
+        content.replaceWith(messagesView(cid, user, 'Admin'));
+      });
+
+      const header = el('div','row');
+      const icon = el('span','badge'); icon.textContent = '🔒 Admin';
+      const labels = el('div','col');
+      const over = el('span','muted subtle'); over.textContent = 'Chat with';
+      const subtitle = el('strong'); subtitle.textContent = 'Admin';
+      labels.append(over, subtitle); header.append(icon, labels);
+
+      const content = el('div'); content.textContent = 'Loading chat…';
+      main.append(header, content);
+
+      side.innerHTML = `<h3 style="margin:6px 0 10px">About</h3>
+        <div class="muted subtle">Realtime Database • Username-only Public auth • Single-file app • Futuristic UI</div>`;
+
+      shell.append(main, side); appRoot.append(shell);
+    }
+
+    // ---------- ADMIN UI (email only) ----------
+    function renderAdmin(user){
+      const appRoot = $('#app'); appRoot.innerHTML = '';
+      const shell = el('div','grid grid-2');
+      const main = el('div','card');
+      const side = el('div','card');
+
+      main.append(topBar(user, 'Admin'));
+
+      const header = el('div','row');
+      const icon = el('span','badge'); icon.textContent = '👥 Users';
+      const labels = el('div','col');
+      const over = el('span','muted subtle'); over.textContent = 'Select a user to chat';
+      const subtitle = el('strong'); subtitle.textContent = 'Active Users';
+      labels.append(over, subtitle); header.append(icon, labels);
+
+      const content = el('div');
+      const chatWrap = el('div'); chatWrap.className = '';
+      content.append(chatWrap);
+
+      main.append(header, content);
+
+      // side: search + list of public users
+      const searchBox = el('div','searchbox');
+      const searchInput = el('input'); searchInput.placeholder = 'Search public users…';
+      searchBox.append(searchInput);
+      const list = el('div','list');
+      side.append(searchBox, list);
+
+      let activeUser = null;
+      let usersCache = [];
+
+      function renderList(){
+        const s = (searchInput.value||'').toLowerCase();
+        list.innerHTML = '';
+        usersCache
+          .filter(u => (u.username||'').toLowerCase().includes(s) || (u.email||'').toLowerCase().includes(s))
+          .forEach(u => {
+            const btn = el('button','pill');
+            btn.innerHTML = `<div><strong>${safe(u.username||'(no username)')}</strong><div class="muted subtle">${safe(u.email||'')}</div></div>`;
+            btn.onclick = ()=>{ activeUser = u; openChat(); };
+            list.append(btn);
+          });
+        if (!list.children.length){
+          const empty = el('div','muted subtle'); empty.textContent = 'No users found.'; list.append(empty);
+        }
+      }
+
+      function openChat(){
+        if (!activeUser) return;
+        chatWrap.innerHTML = '';
+        const cid = chatIdFor(activeUser.uid, user.uid);
+        // ensure meta with participants
+        update(ref(db, `chats/${cid}/meta`), { participantIds: [activeUser.uid, user.uid] });
+        chatWrap.append(messagesView(cid, user, activeUser.username || activeUser.email));
+      }
+
+      // live query: public users only
+      const usersRef = query(ref(db, 'users'), orderByChild('isAdmin'), equalTo(false));
+      onValue(usersRef, (snap)=>{
+        const arr = [];
+        snap.forEach(child => { const v = child.val(); v.uid = child.key; arr.push(v); });
+        // sort by lastSeen desc
+        arr.sort((a,b)=> (b.lastSeen||0) - (a.lastSeen||0));
+        usersCache = arr; renderList();
+      });
+
+      searchInput.oninput = renderList;
+
+      shell.append(main, side); appRoot.append(shell);
+    }
+
+    function renderPublicAuth(){
+      const appRoot = $('#app'); appRoot.innerHTML='';
+      const shell = el('div','grid grid-2');
+      const main = el('div','card');
+      const side = el('div','card');
+
+      const title = el('div','title');
+      title.innerHTML = `<div><strong>NeonChat</strong></div><span class="badge">Public</span>`;
+      main.append(title);
+
+      const f = el('div','col');
+      const username = el('input'); username.placeholder = 'Username (min 3)';
+      const password = el('input'); password.placeholder = 'Password (min 6)'; password.type='password';
+      const rowBtns = el('div','row');
+      const loginBtn = el('button','btn'); loginBtn.textContent = 'Login';
+      const signupBtn = el('button','btn ghost'); signupBtn.textContent = 'Create account';
+      const msg = el('div','muted subtle');
+      rowBtns.append(loginBtn, signupBtn);
+      f.append(username, password, rowBtns, msg);
+      main.append(f);
+
+      side.innerHTML = `<div class="col"><h3>Welcome</h3><div class="muted subtle">This is the public portal. Only username + password are supported here.</div></div>`;
+      shell.append(main, side); appRoot.append(shell);
+
+      async function doLogin(){
+        const u = (username.value||'').trim(); const p = password.value;
+        if (u.length < 3 || p.length < 6){ msg.textContent = 'Enter a valid username and password.'; return; }
+        try {
+          const email = usernameToEmail(u);
+          const cred = await signInWithEmailAndPassword(auth, email, p);
+          await ensureUserDoc(cred.user);
+        } catch(e){ msg.textContent = e.message; }
+      }
+      async function doSignup(){
+        const u = (username.value||'').trim(); const p = password.value;
+        if (u.length < 3 || p.length < 6){ msg.textContent = 'Username ≥3, Password ≥6.'; return; }
+        try {
+          // ensure username unique
+          const allRef = ref(db, 'users');
+          const snap = await get(allRef);
+          let taken = false;
+          if (snap.exists()){
+            snap.forEach(ch=>{ if (String(ch.val().username||'').toLowerCase() === u.toLowerCase()) taken = true; });
+          }
+          if (taken) throw new Error('Username already taken');
+          const email = usernameToEmail(u);
+          const cred = await createUserWithEmailAndPassword(auth, email, p);
+          await updateProfile(cred.user, { displayName: u });
+          await ensureUserDoc(cred.user, { username: u, isAdmin: false });
+        } catch(e){ msg.textContent = e.message; }
+      }
+      loginBtn.onclick = doLogin; signupBtn.onclick = doSignup;
+    }
+
+    function renderAdminAuth(){
+      const appRoot = $('#app'); appRoot.innerHTML='';
+      const shell = el('div','grid grid-2');
+      const main = el('div','card');
+      const side = el('div','card');
+      const title = el('div','title');
+      title.innerHTML = `<div><strong>NeonChat</strong></div><span class="badge">Admin</span>`;
+      main.append(title);
+
+      const f = el('div','col');
+      const email = el('input'); email.type='email'; email.value = ADMIN_EMAIL; email.placeholder = 'Admin email';
+      const password = el('input'); password.placeholder = 'Password'; password.type='password';
+      const loginBtn = el('button','btn'); loginBtn.textContent = 'Login';
+      const msg = el('div','muted subtle');
+      f.append(email, password, loginBtn, msg); main.append(f);
+
+      side.innerHTML = `<div class="col"><h3>Admin Portal</h3><div class="muted subtle">Only <strong>${ADMIN_EMAIL}</strong> can log in here. Public username logins are blocked.</div></div>`;
+      shell.append(main, side); appRoot.append(shell);
+
+      async function doLogin(){
+        const em = (email.value||'').trim().toLowerCase(); const p = password.value;
+        if (em !== ADMIN_EMAIL.toLowerCase()){ msg.textContent = 'Only the designated admin email is allowed on this URL.'; return; }
+        try {
+          const cred = await signInWithEmailAndPassword(auth, em, p);
+          await ensureUserDoc(cred.user, { isAdmin: true });
+          await update(ref(db, `users/${cred.user.uid}`), { isAdmin: true });
+        } catch(e){ msg.textContent = e.message; }
+      }
+      loginBtn.onclick = doLogin;
+    }
+
+    onAuthStateChanged(auth, async (user)=>{
+      if (!user){
+        if (IS_ADMIN_ROUTE) { renderAdminAuth(); } else { renderPublicAuth(); }
+        return;
+      }
+      // Gate by route type
+      const snap = await get(ref(db, `users/${user.uid}`));
+      const profile = snap.exists() ? snap.val() : {};
+      const isAdmin = !!profile.isAdmin;
+
+      if (IS_ADMIN_ROUTE){
+        // On admin URL, only proceed if admin email matches; otherwise sign out.
+        if (String(user.email||'').toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+          await signOut(auth); return;
+        }
+        renderAdmin(user);
+      } else {
+        // On public URL, block email-based logins that look like admin
+        if (String(user.email||'').toLowerCase() === ADMIN_EMAIL.toLowerCase()){
+          // Admin should use /admin
+          await signOut(auth); return;
+        }
+        renderPublic(user);
+      }
+    });
+  </script>
+</body>
+</html>
