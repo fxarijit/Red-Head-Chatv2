@@ -1,28 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Red Head Chat v2</title>
+  <title>Red Head Chat - Public</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script type="module">
-    // Import Firebase SDKs
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
-    import { 
-      getAuth, 
-      createUserWithEmailAndPassword, 
-      signInWithEmailAndPassword, 
-      signOut 
-    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { 
-      getDatabase, 
-      ref, 
-      push, 
-      onChildAdded 
-    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getDatabase, ref, push, onChildAdded } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-    // === Firebase Config ===
     const firebaseConfig = {
       apiKey: "AIzaSyA9Hyb4nv6yZcyOqI_azRLB0v31jdO3YvU",
       authDomain: "red-head-7391.firebaseapp.com",
@@ -34,28 +21,18 @@
       measurementId: "G-N6QX49H4KN"
     };
 
-    // Init
     const app = initializeApp(firebaseConfig);
-    getAnalytics(app);
     const auth = getAuth(app);
     const db = getDatabase(app);
 
-    // UI Routing
-    const path = window.location.pathname;
-    if (path.startsWith("/admin")) {
-      document.getElementById("adminSection").style.display = "block";
-    } else {
-      document.getElementById("publicSection").style.display = "block";
-    }
-
-    // === Public ===
+    // === Public Functions ===
     async function publicRegister() {
       const username = document.getElementById("publicUsername").value;
       const password = document.getElementById("publicPassword").value;
-      if (!username || !password) return alert("Fill username & password");
-      const email = `${username}@redheadchat.local`; // dummy email
+      if(!username || !password) return alert("Fill username and password");
+      const email = `${username}@redheadchat.local`;
       await createUserWithEmailAndPassword(auth, email, password);
-      alert("✅ Registered! Please login.");
+      alert("✅ Registered! Now login.");
     }
 
     async function publicLogin() {
@@ -65,10 +42,10 @@
       await signInWithEmailAndPassword(auth, email, password);
       document.getElementById("publicAuth").classList.add("hidden");
       document.getElementById("publicChat").classList.remove("hidden");
-      listenPublicChat(username);
+      listenPublicChat();
     }
 
-    function listenPublicChat(username) {
+    function listenPublicChat() {
       const messagesRef = ref(db, "chats/public/messages");
       onChildAdded(messagesRef, (snapshot) => {
         const msg = snapshot.val();
@@ -81,69 +58,20 @@
 
     function sendPublicMsg() {
       const text = document.getElementById("publicMsg").value;
-      if (!text) return;
-      const messagesRef = ref(db, "chats/public/messages");
-      push(messagesRef, { sender: "user", text, timestamp: Date.now() });
+      if(!text) return;
+      push(ref(db, "chats/public/messages"), { sender: "user", text, timestamp: Date.now() });
       document.getElementById("publicMsg").value = "";
     }
 
-    // === Admin ===
-    async function adminLogin() {
-      const email = document.getElementById("adminEmail").value;
-      const password = document.getElementById("adminPassword").value;
-      await signInWithEmailAndPassword(auth, email, password);
-      document.getElementById("adminAuth").classList.add("hidden");
-      document.getElementById("adminDashboard").classList.remove("hidden");
-      listenAdminChat();
-    }
-
-    function listenAdminChat() {
-      const messagesRef = ref(db, "chats/public/messages");
-      onChildAdded(messagesRef, (snapshot) => {
-        const msg = snapshot.val();
-        const div = document.createElement("div");
-        div.className = "p-1";
-        div.textContent = msg.sender + ": " + msg.text;
-        document.getElementById("messagesAdmin").appendChild(div);
-      });
-    }
-
-    function sendAdminMsg() {
-      const text = document.getElementById("adminMsg").value;
-      if (!text) return;
-      const messagesRef = ref(db, "chats/public/messages");
-      push(messagesRef, { sender: "admin", text, timestamp: Date.now() });
-      document.getElementById("adminMsg").value = "";
-    }
-
-    // Logout
-    async function logout() {
-      await signOut(auth);
-      location.reload();
-    }
-
-    // Search filter (admin)
-    function filterUsers() {
-      const search = document.getElementById("searchUser").value.toLowerCase();
-      document.querySelectorAll("#userList div").forEach(div => {
-        div.style.display = div.textContent.toLowerCase().includes(search) ? "block" : "none";
-      });
-    }
-
-    // Expose to global
     window.publicRegister = publicRegister;
     window.publicLogin = publicLogin;
     window.sendPublicMsg = sendPublicMsg;
-    window.adminLogin = adminLogin;
-    window.sendAdminMsg = sendAdminMsg;
-    window.logout = logout;
-    window.filterUsers = filterUsers;
+
   </script>
 </head>
 <body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen">
 
-  <!-- Public Section -->
-  <div id="publicSection" class="w-full max-w-md p-4 hidden">
+  <div class="w-full max-w-md p-4">
     <h1 class="text-2xl font-bold text-center mb-4">💬 Chat with Admin</h1>
 
     <!-- Login/Register -->
@@ -161,41 +89,7 @@
         <input id="publicMsg" type="text" placeholder="Type a message..." class="flex-grow p-2 rounded-l bg-gray-700"/>
         <button onclick="sendPublicMsg()" class="bg-blue-600 px-4 rounded-r">Send</button>
       </div>
-      <button onclick="logout()" class="mt-2 w-full bg-red-600 p-2 rounded">Logout</button>
     </div>
   </div>
-
-  <!-- Admin Section -->
-  <div id="adminSection" class="w-full max-w-2xl p-4 hidden">
-    <h1 class="text-2xl font-bold text-center mb-4">🛡️ Admin Panel</h1>
-
-    <!-- Login -->
-    <div id="adminAuth" class="space-y-2">
-      <input id="adminEmail" type="email" placeholder="Admin Email" class="w-full p-2 rounded bg-gray-800"/>
-      <input id="adminPassword" type="password" placeholder="Password" class="w-full p-2 rounded bg-gray-800"/>
-      <button onclick="adminLogin()" class="w-full bg-green-600 p-2 rounded">Login</button>
-    </div>
-
-    <!-- Dashboard -->
-    <div id="adminDashboard" class="hidden">
-      <input id="searchUser" type="text" placeholder="🔍 Search user..." 
-             onkeyup="filterUsers()" 
-             class="w-full p-2 rounded mb-2 bg-gray-700"/>
-
-      <div id="userList" class="h-32 overflow-y-auto bg-gray-800 p-2 rounded mb-2">
-        <div>User1</div>
-        <div>User2</div>
-        <div>User3</div>
-      </div>
-
-      <div id="messagesAdmin" class="h-64 overflow-y-auto bg-gray-800 p-2 rounded mb-2"></div>
-      <div class="flex">
-        <input id="adminMsg" type="text" placeholder="Type a reply..." class="flex-grow p-2 rounded-l bg-gray-700"/>
-        <button onclick="sendAdminMsg()" class="bg-blue-600 px-4 rounded-r">Send</button>
-      </div>
-      <button onclick="logout()" class="mt-2 w-full bg-red-600 p-2 rounded">Logout</button>
-    </div>
-  </div>
-
 </body>
 </html>
